@@ -1,0 +1,179 @@
+; ALU de 4 bits 
+
+.include "m328pdef.inc"
+.org 0x00
+rjmp INICIO
+
+
+INICIO:
+    ldi r16, HIGH(RAMEND)		; Iniciamos el Stack
+    out SPH, r16
+    ldi r16, LOW(RAMEND)
+    out SPL, r16
+
+;  Seteams todos como entrada			PD0-PD3 = A		y	 PD4-PD7 = B
+    ldi r16, 0x00
+    out DDRD, r16
+    clr r16		
+    out PORTD, r16
+;----------------------------------
+    ; PB0-PB2 = SELECT (in)
+    ; PB3 = Carry    (out)
+    ; PB4 = Negative (out)
+    ; PB5 = Zero     (out)
+
+    ldi r16, 0x38	;(0011 1000)
+    out DDRB, r16
+    clr r16
+    out PORTB, r16
+; ------------------------------------
+    ; PC0 - PC3 = F0 - F3  Son el resultado
+
+    ldi r16, 0x0F   ;(0000 1111)
+    out DDRC, r16
+    clr r16
+    out PORTC, r16
+; ----------------------------------------------------
+LOOP:
+    in r16, PIND		; Lee A
+    andi r16, 0x0F		; Los andi son para separar los numeros, para solo
+						; tener en cuenta los bits de uno a la vez al leer
+    in r17, PIND		; Lee B
+    andi r17, 0xF0
+
+    lsr r17		;   Muevo B desde los bits 7-4 a bits 3-0
+    lsr r17		;   Shift 4 veces
+    lsr r17
+    lsr r17
+
+    in r18, PINB			; Lee los Bits de Select
+    andi r18, 0x07			; El andi es para que solo lea las entardas y no las flags
+
+;---------------------------------------------
+    clr r20		; Seteamos las Flags en 0
+
+;---------- Select Operation ----------------
+    cpi r18, 0
+    breq OP_CLEAR
+
+    cpi r18, 1
+    breq OP_RESTA
+
+    cpi r18, 2
+    breq OP_SUMA
+
+    cpi r18, 3
+    breq OP_XOR
+
+    cpi r18, 4
+    breq OP_AND
+
+    cpi r18, 5
+    breq OP_OR
+
+    cpi r18, 6
+    breq OP_SHLF
+
+    rjmp OP_INCR		; No es necesario otro cpi, no hay mas casos, salta de una
+
+;------------- 000 : Clear--------------------
+OP_CLEAR:
+		clr r19
+		rjmp FLAGS
+
+; ----------- 001 : (A-B) --------------------
+OP_RESTA:
+    cp r16, r17
+    brsh SIN_BORROW  
+    ori r20, (1<<1)		; Negative = 1 si A < B
+;	ori r20, (1<<0)		; Carry tecnicamente tambien es Borrow, por el Complemento A2
+
+SIN_BORROW:				; Se saltea setear la Flag en 1 porque es positivo
+    mov r19, r16
+    sub r19, r17
+    andi r19, 0x0F		; 0x0F --> (0000 1111) es para que solo tome en cuenta esos bits
+
+    rjmp FLAGS			; Salta a Mostrar las flags y terminar el ciclo
+
+; ----------- 010 : (A+B) --------------------
+
+OP_SUMA:
+    mov r19, r16
+    add r19, r17 
+    cpi r19, 16				; Checkea si el resultado >= 16, para ver si hay Carry
+    brlo SUMA_SIN_CARRY		; Si es menor a 16 se salta lo siguiente: (poner 1 en la Flag Carry)
+    ori r20, (1<<0)			; Carry = 1
+
+SUMA_SIN_CARRY:
+    andi r19, 0x0F
+    rjmp FLAGS
+
+;---------------- 011 : XOR --------------------------
+
+OP_XOR:
+
+    mov r19, r16
+    eor r19, r17
+    andi r19, 0x0F		
+    rjmp FLAGS
+
+;------------- 100 : AND ----------------------
+	 
+OP_AND:
+    mov r19, r16
+    and r19, r17
+    andi r19, 0x0F
+    rjmp FLAGS
+
+;------------ 101 : OR ------------------
+
+OP_OR:
+    mov r19, r16
+    or r19, r17
+    andi r19, 0x0F
+    rjmp FLAGS
+
+;----------- 110 : SHL  (Shift Left) ---------------
+				
+OP_SHLF:
+    mov r19, r16
+    sbrs r19, 3				; El Bit 3 pasa a ser el Carry
+    rjmp SHL_SIN_CARRY		; Si el Bit 3 = 0, el Carry va a ser 0
+    ori r20, (1<<0)			; Aca se guardan las flags, el R20(0) es Fcarry
+
+
+SHL_SIN_CARRY:				; Si el bit 3 es 0, se saltea esa parte
+			lsl r19		
+			andi r19, 0x0F
+			rjmp FLAGS
+	
+;----------------- 111 - INC (incrementar) -----------------
+
+OP_INCR:
+    mov r19, r16
+    inc r19
+    cpi r19, 16			; Checkea si hay Carry
+    brlo INC_SIN_CARRY
+    ori r20, (1<<0)
+
+INC_SIN_CARRY:
+    andi r19, 0x0F
+    rjmp FLAGS
+
+;7777777777777777777777777777777777777777777777777777777777
+
+FLAGS:
+    cpi r19, 0
+    brne NO_ZERO
+    ori r20, (1<<2)
+
+NO_ZERO:
+    out PORTC, r19
+
+    lsl r20			; Los movemos 3 bits para que no se peleen con Select op
+    lsl r20
+    lsl r20
+	andi r20, 0x38	; Me aseguro que solo tome esos 3 bits
+	out PORTB, r20
+ ;						bit3= Carry | bit4 = Negative | bit5 = Zero
+    rjmp LOOP
