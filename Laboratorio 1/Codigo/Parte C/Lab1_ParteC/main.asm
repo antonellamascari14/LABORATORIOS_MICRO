@@ -41,7 +41,7 @@ LOOP_PRINCIPAL:
 	; Verificar Botones 
 	rcall LEER_BOTONES
 
-	; Comparaci髇 de estado con saltos condicionales BRNE
+	; Comparaci贸n de estado con saltos condicionales BRNE
 	cpi ESTADO, 1
 	brne TEST_E2
 	rjmp EJECUTAR_ESTADO_1
@@ -122,5 +122,245 @@ ESTADO_INVALIDO:
 	rjmp LOOP_PRINCIPAL
 
 	EJECUTAR_ESTADO_3:
+; ESTADO 3: De punta a punta
+
+ldi TEMP, 0b10000001
+out PORTD, TEMP
+rcall RETARDO_Y_LECTURA
+
+ldi TEMP, 0b01000010
+out PORTD, TEMP
+rcall RETARDO_Y_LECTURA
+
+ldi TEMP, 0b00100100
+out PORTD, TEMP
+rcall RETARDO_Y_LECTURA
+
+ldi TEMP, 0b00011000
+out PORTD, TEMP
+rcall RETARDO_Y_LECTURA
+rjmp LOOP_PRINCIPAL
+
+EJECUTAR_ESTADO_4:
+
+;ESTADO 4: Efecto Kitt
+
+ldi TEMP, 0b10000000
+out PORTD, TEMP
+rcall RETARDO_Y_LECTURA
+
+ldi TEMP, 0b01000000
+out PORTD, TEMP
+rcall RETARDO_Y_LECTURA
+
+ldi TEMP, 0b00100000
+out PORTD, TEMP
+rcall RETARDO_Y_LECTURA
+
+ldi TEMP, 0b00010000
+out PORTD, TEMP
+rcall RETARDO_Y_LECTURA
+
+ldi TEMP, 0b00001000
+out PORTD, TEMP
+rcall RETARDO_Y_LECTURA
+
+ldi TEMP, 0b00000100
+out PORTD, TEMP
+rcall RETARDO_Y_LECTURA
+
+ldi TEMP, 0b00000010
+out PORTD, TEMP
+rcall RETARDO_Y_LECTURA
+
+ldi TEMP, 0b00000001
+out PORTD, TEMP
+rcall RETARDO_Y_LECTURA
+rjmp LOOP_PRINCIPAL
+
+EJECUTAR_ESTADO_5:
+
+; ESTADO 5: Llenado
+
+ldi TEMP, 0b10000000
+out PORTD, TEMP
+rcall RETARDO_Y_LECTURA
+
+ldi TEMP, 0b11000000
+out PORTD, TEMP
+rcall RETARDO_Y_LECTURA
+
+ldi TEMP, 0b11100000
+out PORTD, TEMP
+rcall RETARDO_Y_LECTURA
+
+ldi TEMP, 0b11110000
+out PORTD, TEMP
+rcall RETARDO_Y_LECTURA
+
+ldi TEMP, 0b11111000
+out PORTD, TEMP
+rcall RETARDO_Y_LECTURA
+
+ldi TEMP, 0b11111100
+out PORTD, TEMP
+rcall RETARDO_Y_LECTURA
+
+ldi TEMP, 0b11111110
+out PORTD, TEMP
+rcall RETARDO_Y_LECTURA
+
+ldi TEMP, 0b11111111
+out PORTD, TEMP
+rcall RETARDO_Y_LECTURA
+rjmp LOOP_PRINCIPAL
+
+EJECUTAR_ESTADO_6:
+
+; ESTADO 6: de 4 en 4
+
+ldi TEMP, 0b11110000
+out PORTD, TEMP
+rcall RETARDO_Y_LECTURA
+
+ldi TEMP, 0b00001111
+out PORTD, TEMP
+rcall RETARDO_Y_LECTURA
+rjmp LOOP_PRINCIPAL
+
+EJECUTAR_ESTADO_7:
+
+; ESTADO 7: Choque en el medio
+
+ldi TEMP, 0b10000001
+out PORTD, TEMP
+rcall RETARDO_Y_LECTURA
+
+ldi TEMP, 0b11000011
+out PORTD, TEMP
+rcall RETARDO_Y_LECTURA
+
+ldi TEMP, 0b11100111
+out PORTD, TEMP
+rcall RETARDO_Y_LECTURA
+
+ldi TEMP, 0b11111111
+out PORTD, TEMP
+rcall RETARDO_Y_LECTURA
+rjmp LOOP_PRINCIPAL
+
+
+EJECUTAR_ESTADO_8:
+
+; ESTADO 8: de a 3
+
+ldi TEMP, 0b11100000
+out PORTD, TEMP
+rcall RETARDO_Y_LECTURA
+
+ldi TEMP, 0b01110000
+out PORTD, TEMP
+rcall RETARDO_Y_LECTURA
+
+ldi TEMP, 0b00111000
+out PORTD, TEMP
+rcall RETARDO_Y_LECTURA
+
+ldi TEMP, 0b00011100
+out PORTD, TEMP
+rcall RETARDO_Y_LECTURA
+
+ldi TEMP, 0b00001110
+out PORTD, TEMP
+rcall RETARDO_Y_LECTURA
+
+ldi TEMP, 0b00000111
+out PORTD, TEMP
+rcall RETARDO_Y_LECTURA
+rjmp LOOP_PRINCIPAL
+
+; lectura de los botones y el antirebote
+
+LEER_BOTONES:
+
+in TEMP, PINC
+
+; Boton 3 (reset) 2 (PINC2)
+sbrs TEMP, PINC2 ; sI PINC2 es 0 (presionado), se ejecuta la siguiente linea
+rjmp ACCION_RESET
+
+; Boton 1: SIGUIENTE  A0 (PINC0)
+
+sbrs TEMP, PINC0
+rjmp ACCION_SIG
+
+;Boton 2: Anterior A1 (PINC1)
+
+sbrs TEMP, PINC1
+rjmp ACCION_ANT
+
+ret
+
+ACCION_RESET:
+ldi ESTADO, 1
+rcall ANTIRREBOTE
+pop TEMP ; Limpia la direcci贸n de retorno en la pila
+pop TEMP
+rjmp LOOP_PRINCIPAL
+
+ACCION_SIG:
+inc ESTADO
+cpi ESTADO, 9
+brne FIN_SIG
+ldi ESTADO, 1   ; Vuelve a 1 si pasa de 8
+
+FIN_SIG:
+rcall ANTIRREBOTE
+pop TEMP ; Limpia la direcci贸n de retorno en la pila
+pop TEMP
+rjmp LOOP_PRINCIPAL
+
+ACCION_ANT:
+dec ESTADO
+cpi ESTADO, 0
+brne FIN_ANT
+ldi ESTADO, 8  ; Vuelve a 8 si se pasa de 1
+
+FIN_ANT:
+rcall ANTIRREBOTE
+pop TEMP ; Limpia la direcci贸n de retorno en la pila
+pop TEMP
+rjmp LOOP_PRINCIPAL
+
+
+;tiempos
+
+RETARDO_y_LECTURA:
+ldi DELAY1, 70
+D_LOOP:
+rcall LEER_BOTONES
+rcall DELAY_CORTO
+dec DELAY1
+brne D_LOOP
+ret
+
+DELAY_CORTO:
+ldi DELAY2, 200
+D2: ldi DELAY3, 250
+D3: dec DELAY3
+brne D3
+dec DELAY2
+brne D2
+ret
+
+ANTIRREBOTE: ; Esperar a que el usuario suelte el bot贸n
+rcall DELAY_CORTO
+ESPERAR_SOLTAR:
+in TEMP, PINC
+andi TEMP, 0b00000111
+cpi TEMP, 0b00000111 ; Verifica si est谩n todos sin presionar
+brne ESPERAR_SOLTAR  ; Si sigue presionado, espera
+ret 
+
 
 	
