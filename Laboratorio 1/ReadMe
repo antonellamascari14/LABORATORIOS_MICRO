@@ -1,0 +1,19 @@
+En el siguiente Git se subiran los archivos pertinentes al Laboratorio N 1 de la UC Tecnoogias de Microprocesamiento.
+En el siguiente Git se subiran los archivos pertinentes a las practicas de Laboratorio y Evaluaciones grupalesla UC Tecnoogias de Microprocesamiento.
+Se aborda la solucion de diferentes problematicas haciendo uso del Atmega328P, implementando su codigo mediante Assembler.
+Tematicas: 
+    - Seccion A: Lavadora Automatica
+            Codigo referente al funcionamiento de una lavadora con ciclos automaticos           
+    - Seccion B: Contador Digital con tres botones y display de 7 segmentos    
+            Nombre autoexplicativo, un contador ascendente y descendente, controladoo mediante tres botones.
+    - Seccion C: Secuencias Led seleccionables
+            Consiste en un repertorio de secuencias de encendido de Leds, entre las cuales podemos desplazarnos haciendo uso de 3 
+            botones, uno para avanzar entre las opciones, otro para retroceder y un tercero que nos retorna a una secuencia prestablecida.
+    - Seccion D: ALU de 4 bits con Flags de estado
+            Se trata de una ALU capaz de seleccionar entre 7 operaciones aritmeticologicas diferentes, acepta dos operandos, cada uno de 4
+            bits, da como salidas del sistema: el resultado de 4 bits (denotado en 4 LEDS), la operacion seleccionada (mediantes 3 leds), a
+            la vez que 3 FLAGS (tambien haciendo uso de 3 leds), corresppondientes a; Carry (la operacion excede el rango de los 4 bits, 
+            Negative (Alerta que la operacion dio un resultado negativo, el cual se muestra en complemento A2) y Zero (dentro del rango)
+            
+    
+    
