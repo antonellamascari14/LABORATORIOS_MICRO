@@ -67,6 +67,48 @@ rjmp MAIN_LOOP
 
 recibir_usart:
 
-lds estado_usart, 
+lds estado_usart,  UCSR0A
+sbrs estado_usart, RXC0 ; se fija si hay un nuevo dato
+rjmp recibir_usart
+lds dato_recibido, UDR0 ; guarda el dato
+ret
+
+; activación de un led del 0 al 7
+
+encender_led:
+
+ldi mascara_leds 0b00000001 ; empieza en el bit 0
+mov controlador_desplazamiento, dato_recibido
+
+cpi controlador_desplazamiento, 0
+breq aplicar_puertos
+
+bucle_desplazamiento:
+
+lsl mascara_leds
+dec controlador_desplazamiento
+brne bucle_desplazamiento
+
+aplicar_puertos:
+
+; envia las primeras salidas a PORTB
+
+mov salida_temp, mascara_leds
+andi salida_temp, 0b00111111
+out PORTB, salida_temp
+
+; envia las ultimas dos salidas al PORTC
+
+mov salida_temp, mascara_leds
+lsr salida_temp
+lsr salida_temp
+lsr salida_temp
+lsr salida_temp
+lsr salida_temp
+lsr salida_temp
+andi salida_temp, 0b00000011
+out PORTC, salida_temp
+ret
+
 
 
