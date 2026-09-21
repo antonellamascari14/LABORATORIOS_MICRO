@@ -52,4 +52,46 @@ sbi PORTC, PORTC2
     ldi dato_pulsadores, (1<<UCSZ01) | (1<<UCSZ00)
     sts UCSR0C, dato_pulsadores
 
+MAIN_LOOP:
+
+; leer el puerto C
+
+	in dato_pulsadores, PINC
+	andi dato_pulsadores, 0b00000111  ; conserva solo los pines PC0, PC1 y PC2
+
+; invertimos los bit pull-up (arriba 1)
+
+	com dato_pulsadores
+    andi dato_pulsadores, 0b00000111  ; consreva de nuevo los pines que el com invirtió
+
+; transmitir el dato
+
+	rcall transmitir_usart ; llama a la subrutina que envía el byte procesado por tx
+	rcall retardo_antirrebote ; llama al retrdo para evitar transmisiones erroneas
+
+	rjmp MAIN_LOOP
+
+; subrutinas
+
+transmitir_usart: 
+	lds estado_usart, UCSR0A ; lee el registro de estado A del periférico del usart
+	sbrs estado_usart, UDRE0   ; se fija que el buffer de envio este libre    
+    rjmp transmitir_usart   ; si no está libre, espera
+    sts UDR0, dato_pulsadores      ; carga el dato en el registro de transmisión
+    ret
+
+	; Subrutina de retardo corto para antirrebote
+retardo_antirrebote:
+	ldi contador_1, 100 ; carga 100 para el ciclo externo
+
+bucle_externo:
+    ldi contador_2, 250 ; 250 para el interno
+bucle_interno:
+    
+    dec contador_2
+    brne bucle_interno
+    dec contador_1
+    brne bucle_externo
+    ret
+
 
