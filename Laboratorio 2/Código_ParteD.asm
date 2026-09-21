@@ -31,7 +31,7 @@ out SPH, dato_recibido
 ldi dato_recibido, 0b00111111 ; PB0 A PB5 salidas
 out DDRB, dato_recibido
 ldi dato_recibido, 0b00000011 ; PC0 a PC1 como salidas
-out SSRC, dato_recibido
+out DDRC, dato_recibido
 
 ; apagar las led al principio
 
@@ -77,7 +77,7 @@ ret
 
 encender_led:
 
-ldi mascara_leds 0b00000001 ; empieza en el bit 0
+ldi mascara_leds, 0b00000001 ; empieza en el bit 0
 mov controlador_desplazamiento, dato_recibido
 
 cpi controlador_desplazamiento, 0
