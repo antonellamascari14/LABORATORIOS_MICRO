@@ -125,7 +125,7 @@ RESET_UART:
 ;ooooooooooooo SELECCIONAR SENAL 6 ooooooooooooooo
 SELECCIONAR_6:
     cli                      ; Deshab. las interrup. momentaneamente 
-							; (Es para que el Timer0 no meta la pata si justo se da)
+							; (Es para que el Timer1 no meta la pata si justo se da)
     ldi seleccion,6          ; Guardamos la senal elegida
     clr indice               ; iniciamos desde la muestra 0
     sei						; Volvemos a habilitar interrup
