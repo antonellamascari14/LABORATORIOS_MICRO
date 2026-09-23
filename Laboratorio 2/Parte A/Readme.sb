@@ -1,1 +1,4 @@
+Parte A de la guia de laboratorio:
 
+Consiste en el uso de una matriz de LEDs a  modo de display, en ella se han de visualizar (con desplazamiento) diversos
+mensajes predefinidos, seleccionables desde la consola de comunicacion serial.
