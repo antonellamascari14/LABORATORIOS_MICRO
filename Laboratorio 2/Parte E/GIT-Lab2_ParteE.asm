@@ -1,255 +1,261 @@
 .include "m328pdef.inc"
 
-.equ F_CPU = 16000000
-.equ BAUD  = 115200
-.equ BPS   = 8    ; (16MHz / (16 * 115200)) - 1 = 8
+.equ f_cpu = 16000000
+.equ baud  = 115200
+.equ bps   = 8    ; (16MHz / (16 * 115200)) - 1 = 8
 
 ; estados de la maquina
-.equ ESTADO_CERRADA  = 0
-.equ ESTADO_ABRIENDO = 1
-.equ ESTADO_ABIERTA  = 2
-.equ ESTADO_CERRANDO = 3
-.equ ESTADO_DETENIDO = 4
+.equ estado_cerrada  = 0
+.equ estado_abriendo = 1
+.equ estado_abierta  = 2
+.equ estado_cerrando = 3
+.equ estado_detenido = 4
 
-; registros
-.def aux1             = r16
-.def aux2             = r17
-.def estado_actual    = r18   ; mantiene el estado del sistema 0-4
-.def flag_obstaculo   = r19   ; 1 = se detecto un obstaculo y requiere reporte
-.def sreg_temp        = r20   ; resguardo de SREG en ISR
+; asignacion de registros
+.def aux1            = r16
+.def aux2            = r17
+.def estado_actual    = r18   ; guarda el estado actual (0 al 4)
+.def flag_obstaculo   = r19   ; 1 si salto el sensor de obstaculo
+.def sreg_temp        = r20   ; guarda sreg durante la interrupcion
 
-; interrupciones
+; vectores de interrupcion
 .cseg
 .org 0x0000
-    rjmp RESET
-.org PCI0addr                 ; vector de interrupción pin Change 0 PCINT0_vect
-    rjmp ISR_PCINT0
+    rjmp reset
+.org PCI0addr                 ; interrupcion por cambio de pin en portb
+    rjmp isr_pcint0
 
-; inicialización
-RESET:
-    ; stack pointer
+; inicializacion del sistema
+reset:
+    ; configuramos del stack pointer
     ldi aux1, HIGH(RAMEND)
     out SPH, aux1
     ldi aux1, LOW(RAMEND)
     out SPL, aux1
 
-    ; configuro entradas (PORTC: PC0..PC3 con Pull-ups)
+    ; entradas en portc pc0 - pc3 con pull-up
     clr aux1
     out DDRC, aux1
     ldi aux1, 0b00001111
     out PORTC, aux1
 
-    ; configuro entrada de interrupción PORTB: PB0 con Pull-up
+    ; entrada del sensor s3 en pb0 con pull-up
     cbi DDRB, PB0
     sbi PORTB, PB0
 
-    ; configuro salidas PORTD: PD4 = MotorAbrir, PD5 = MotorCerrar, PD6 = Alarma
+    ; salidas en portd: pd4 (abrir), pd5 (cerrar), pd6 (alarma)
     in aux1, DDRD
     ori aux1, (1<<PD4) | (1<<PD5) | (1<<PD6)
     out DDRD, aux1
     
-    ; apagar salidas inicialmente (CORREGIDO: lleva ~)
+    ; apago todas las salidas al arrancar
     in aux1, PORTD
     andi aux1, ~((1<<PD4) | (1<<PD5) | (1<<PD6))
     out PORTD, aux1
 
-    ; inicializamos USART
-    rcall INICIALIZAR_USART
+    ; inicializo la comunicacion serie
+    rcall inicializar_usart
 
-    ; configurar Interrupción por cambio de pin PCINT0 en PB0
+    ; configuro la interrupcion pcint0 para pb0
     lds aux1, PCICR
-    ori aux1, (1<<PCIE0)       ; habilita grupo PCIE0 en portb
+    ori aux1, (1<<PCIE0)
     sts PCICR, aux1
 
     lds aux1, PCMSK0
-    ori aux1, (1<<PCINT0)      ; habilita máscara para pin PB0
+    ori aux1, (1<<PCINT0)
     sts PCMSK0, aux1
 
-    ; reset 
+    ; estado inicial
     clr flag_obstaculo
-    ldi estado_actual, ESTADO_CERRADA
+    ldi estado_actual, estado_cerrada
 
-    ; habilitar interrupciones globales 
+    ; habilito interrupciones globales
     sei
 
-    ; mensaje inicial al encender
+    ; mensaje inicial
     ldi zl, LOW(msg_cerrada * 2)
     ldi zh, HIGH(msg_cerrada * 2)
-    rcall ENVIAR_TEXTO_USART
+    rcall enviar_texto_usart
 
-MAIN_LOOP:
-    ; verificar si la ISR registró una detección de obstáculo
+main_loop:
+    ; me fijo si el sensor detecto un obstaculo
     tst flag_obstaculo
     breq verificar_maquina
 
-    ; si hubo obstaculo, transmitir los mensajes por usart
+    ; si hubo obstaculo mando los avisos por usart
     clr flag_obstaculo
     ldi zl, LOW(msg_obstaculo * 2)
     ldi zh, HIGH(msg_obstaculo * 2)
-    rcall ENVIAR_TEXTO_USART
+    rcall enviar_texto_usart
 
     ldi zl, LOW(msg_detenido * 2)
     ldi zh, HIGH(msg_detenido * 2)
-    rcall ENVIAR_TEXTO_USART
+    rcall enviar_texto_usart
 
 verificar_maquina:
-    rcall EVALUAR_MAQUINA_ESTADOS
-    rcall RETARDO_DEBOUNCE
-    rjmp MAIN_LOOP
+    rcall evaluar_maquina_estados
+    rcall retardo_debounce
+    rjmp main_loop
 
-; rutina de interrupcion ISR para sensor S3 (PB0)
-ISR_PCINT0:
-    in sreg_temp, SREG         ; guarda el registro de estado
+; interrupcion para el sensor de obstaculo s3 pb0
+isr_pcint0:
+    in sreg_temp, SREG
 
-    ; Comprobar si S3 (PB0) está en nivel bajo, obstáculo detectado
+    ; si pb0 esta en alto no hay obstaculo
     sbic PINB, PB0
-    rjmp FIN_ISR               ; si está en alto, no hay obstáculo
+    rjmp fin_isr
 
-    ; solo actuar si la puerta se está moviendo 
-    cpi estado_actual, ESTADO_ABRIENDO
-    breq APAGADO_EMERGENCIA
-    cpi estado_actual, ESTADO_CERRANDO
-    breq APAGADO_EMERGENCIA
-    rjmp FIN_ISR
+    ; solo actuo si la puerta se estaba moviendo
+    cpi estado_actual, estado_abriendo
+    breq apagado_emergencia
+    cpi estado_actual, estado_cerrando
+    breq apagado_emergencia
+    rjmp fin_isr
 
-APAGADO_EMERGENCIA:
-    ; detiene inmediatamente motor abrir, Motor cerrar y alarma (CORREGIDO)
+apagado_emergencia:
+    ; apago motores y alarma 
     in aux1, PORTD
     andi aux1, ~((1<<PD4) | (1<<PD5) | (1<<PD6))
     out PORTD, aux1
 
-    ldi estado_actual, ESTADO_DETENIDO
-    ldi flag_obstaculo, 1      ; indicar al main loop que envíe la alerta usart
+    ldi estado_actual, estado_detenido
+    ldi flag_obstaculo, 1
 
-FIN_ISR:
-    out SREG, sreg_temp        ; restaura registro de estado
+fin_isr:
+    out SREG, sreg_temp
     reti
 
-; maquina de Estados
-EVALUAR_MAQUINA_ESTADOS:
-    cpi estado_actual, ESTADO_CERRADA
-    breq M_ESTADO_CERRADA
+; maquina de estados principal
+evaluar_maquina_estados:
+    ; si estan apretados bt_abrir y bt_cerrar al mismo tiempo, no hago nada
+    in aux1, PINC
+    com aux1                  ; invierto los bits para evaluar en 1 los presionados
+    andi aux1, (1<<PC0) | (1<<PC1)
+    cpi aux1, (1<<PC0) | (1<<PC1)
+    breq fin_evaluar          ; si los dos estan apretados, ignoro la orden
 
-    cpi estado_actual, ESTADO_ABRIENDO
-    breq M_ESTADO_ABRIENDO
+    cpi estado_actual, estado_cerrada
+    breq m_estado_cerrada
 
-    cpi estado_actual, ESTADO_ABIERTA
-    breq M_ESTADO_ABIERTA
+    cpi estado_actual, estado_abriendo
+    breq m_estado_abriendo
 
-    cpi estado_actual, ESTADO_CERRANDO
-    breq M_ESTADO_CERRANDO
+    cpi estado_actual, estado_abierta
+    breq m_estado_abierta
 
-    cpi estado_actual, ESTADO_DETENIDO
-    breq M_ESTADO_DETENIDO
+    cpi estado_actual, estado_cerrando
+    breq m_estado_cerrando
+
+    cpi estado_actual, estado_detenido
+    breq m_estado_detenido
+
+fin_evaluar:
     ret
 
 ; estado 0: puerta cerrada
-M_ESTADO_CERRADA:
-    sbis PINC, PC0              ; se fija si se presiono BT_ABRIR
-    rjmp INICIAR_APERTURA
+m_estado_cerrada:
+    sbis PINC, PC0             ; se pulso bt_abrir
+    rjmp iniciar_apertura
     ret
 
-INICIAR_APERTURA:
-    sbis PINC, PC2              ; si ya está en S1, no abrir
+iniciar_apertura:
+    sbis PINC, PC2             ; si ya esta en el final de carrera s1, no abro
     ret
 
-    ; activa Motor Abrir y Alarma 
+    ; apago motor cerrar (por seguridad) y prendo motor abrir + alarma
     in aux1, PORTD
+    andi aux1, ~(1<<PD5)
     ori aux1, (1<<PD4) | (1<<PD6)
     out PORTD, aux1
 
-    ldi estado_actual, ESTADO_ABRIENDO
+    ldi estado_actual, estado_abriendo
 
     ldi zl, LOW(msg_abriendo * 2)
     ldi zh, HIGH(msg_abriendo * 2)
-    rcall ENVIAR_TEXTO_USART
+    rcall enviar_texto_usart
     ret
 
 ; estado 1: puerta abriendo
-M_ESTADO_ABRIENDO:
-    ; comprueba si llego al final de carrera superior S1
-    sbis PINC, PC2
-    rjmp FIN_APERTURA
+m_estado_abriendo:
+    sbis PINC, PC2             ; llego al final de carrera s1
+    rjmp fin_apertura
 
-    ; comprueba si se presiono BT_CERRAR para invertir marcha
-    sbis PINC, PC1
-    rjmp INICIAR_CIERRE
+    sbis PINC, PC1             ; apretaron bt_cerrar para invertir
+    rjmp iniciar_cierre
     ret
 
-FIN_APERTURA:
-    ; Apaga Motor Abrir y Alarma (CORREGIDO: lleva ~)
+fin_apertura:
+    ; apago motor abrir y alarma
     in aux1, PORTD
     andi aux1, ~((1<<PD4) | (1<<PD6))
     out PORTD, aux1
 
-    ldi estado_actual, ESTADO_ABIERTA
+    ldi estado_actual, estado_abierta
 
     ldi zl, LOW(msg_abierta * 2)
     ldi zh, HIGH(msg_abierta * 2)
-    rcall ENVIAR_TEXTO_USART
+    rcall enviar_texto_usart
     ret
 
 ; estado 2: puerta abierta
-M_ESTADO_ABIERTA:
-    sbis PINC, PC1              ; se fija si se presiono BT_CERRAR
-    rjmp INICIAR_CIERRE
+m_estado_abierta:
+    sbis PINC, PC1             ; apretaron bt_cerrar
+    rjmp iniciar_cierre
     ret
 
-INICIAR_CIERRE:
-    sbis PINC, PC3              ; si ya esta en S2, no cerrar
+iniciar_cierre:
+    sbis PINC, PC3             ; si ya esta en el final de carrera s2, no cierro
     ret
 
-    ; Apaga Motor Abrir por seguridad (CORREGIDO: lleva ~) y activa Motor Cerrar y Alarma 
+    ; apago motor abrir y prendo motor cerrar + alarma
     in aux1, PORTD
     andi aux1, ~(1<<PD4)
     ori aux1, (1<<PD5) | (1<<PD6)
     out PORTD, aux1
 
-    ldi estado_actual, ESTADO_CERRANDO
+    ldi estado_actual, estado_cerrando
 
     ldi zl, LOW(msg_cerrando * 2)
     ldi zh, HIGH(msg_cerrando * 2)
-    rcall ENVIAR_TEXTO_USART
+    rcall enviar_texto_usart
     ret
 
 ; estado 3: puerta cerrando
-M_ESTADO_CERRANDO:
-    ; comprueba si llego al final de carrera inferior S2
-    sbis PINC, PC3
-    rjmp FIN_CIERRE
+m_estado_cerrando:
+    sbis PINC, PC3             ; llego al final de carrera s2
+    rjmp fin_cierre
 
-    ; comprueba si se presiono BT_ABRIR para invertir marcha
-    sbis PINC, PC0
-    rjmp INICIAR_APERTURA
+    sbis PINC, PC0             ; apretaron bt_abrir para invertir
+    rjmp iniciar_apertura
     ret
 
-FIN_CIERRE:
-    ; apaga Motor Cerrar y Alarma (CORREGIDO: lleva ~)
+fin_cierre:
+    ; apago motor cerrar y alarma
     in aux1, PORTD
     andi aux1, ~((1<<PD5) | (1<<PD6))
     out PORTD, aux1
 
-    ldi estado_actual, ESTADO_CERRADA
+    ldi estado_actual, estado_cerrada
 
     ldi zl, LOW(msg_cerrada * 2)
     ldi zh, HIGH(msg_cerrada * 2)
-    rcall ENVIAR_TEXTO_USART
+    rcall enviar_texto_usart
     ret
 
-; estado 4: detenido por seguridad
-M_ESTADO_DETENIDO:
+; estado 4: detenido por obstaculo
+m_estado_detenido:
     sbis PINC, PC0
-    rjmp INICIAR_APERTURA
+    rjmp iniciar_apertura
 
     sbis PINC, PC1
-    rjmp INICIAR_CIERRE
+    rjmp iniciar_cierre
     ret
 
-; rutinas de comunicacion USART
-INICIALIZAR_USART:
-    ldi aux1, HIGH(BPS)
+; comunicacion usart
+inicializar_usart:
+    ldi aux1, HIGH(bps)
     sts UBRR0H, aux1
-    ldi aux1, LOW(BPS)
+    ldi aux1, LOW(bps)
     sts UBRR0L, aux1
 
     ldi aux1, (1<<RXEN0) | (1<<TXEN0)
@@ -259,24 +265,24 @@ INICIALIZAR_USART:
     sts UCSR0C, aux1
     ret
 
-ENVIAR_CARACTER:
+enviar_caracter:
     lds aux2, UCSR0A
     sbrs aux2, UDRE0
-    rjmp ENVIAR_CARACTER
+    rjmp enviar_caracter
     sts UDR0, aux1
     ret
 
-ENVIAR_TEXTO_USART:
+enviar_texto_usart:
     lpm aux1, z+
     tst aux1
-    breq FIN_TEXTO
-    rcall ENVIAR_CARACTER
-    rjmp ENVIAR_TEXTO_USART
-FIN_TEXTO:
+    breq fin_texto
+    rcall enviar_caracter
+    rjmp enviar_texto_usart
+fin_texto:
     ret
 
-; retardo anti rebote
-RETARDO_DEBOUNCE:
+; retardo antirebote
+retardo_debounce:
     push r24
     push r25
     ldi r25, 100
@@ -291,11 +297,10 @@ d_loop2:
     pop r24
     ret
 
-; mensajes en la memoria flash (Alineados a 2 bytes)
+; mensajes guardados en flash
 msg_abriendo:  .db "Puerta abriendo.", 13, 10, 0, 0     
 msg_abierta:   .db "Puerta abierta.", 13, 10, 0        
 msg_cerrando:  .db "Puerta cerrando.", 13, 10, 0, 0     
 msg_cerrada:   .db "Puerta cerrada.", 13, 10, 0         
 msg_obstaculo: .db "Obstaculo detectado.", 13, 10, 0, 0    
 msg_detenido:  .db "Movimiento detenido por seguridad.", 13, 10, 0, 0
-   
