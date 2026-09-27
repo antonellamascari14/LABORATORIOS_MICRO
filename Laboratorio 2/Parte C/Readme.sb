@@ -1,5 +1,12 @@
 Parte C : Plotter
 
+En lugar de hacer uso de llamadas relativas para definir los movimientos del sistema, se opto
+por disenar LUTs independientes para cada figura, en las cuales se hace uso de numeros a modo
+de comandos/llamada a funciones predefinidas.
+Esto nos permite reestructurar las figuras mas facilmente, permitiendonos anadir y modificar
+trazos o controlar otras funciones como el movimiento del lapiz o separaciones definidas de manera
+muy breve y simple.
+
   Las formas predefinidas son:
       - Trinagulo
       - Circulo
